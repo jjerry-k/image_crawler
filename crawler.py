@@ -3,6 +3,12 @@ import os, time, urllib3, platform, argparse
 from pprint import pprint
 from bs4 import BeautifulSoup
 from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.common.exceptions import ElementNotVisibleException, StaleElementReferenceException
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
 
 def crawler(keyword, dst_root, mode = "headless"):
 
@@ -16,7 +22,7 @@ def crawler(keyword, dst_root, mode = "headless"):
     elif platform.system() == 'Darwin':
         print('Detected OS : Mac')
         executable = './webdriver/chromedriver_mac'
-    
+
     options = webdriver.ChromeOptions()
     options.add_argument('window-size=1920x1080')
     options.add_argument("disable-gpu")
@@ -33,7 +39,11 @@ def crawler(keyword, dst_root, mode = "headless"):
 
     elem = driver.find_element_by_tag_name("body")
 
-    print(elem)
+    for i in range(10):
+        elem.send_keys(Keys.PAGE_DOWN)
+        time.sleep(0.2)
+
+        
 
 
 if __name__ == "__main__":

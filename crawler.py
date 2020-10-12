@@ -1,25 +1,43 @@
 # %%
-import os, time, urllib3, platform, argparse
-from tqdm import tqdm
-from pprint import pprint
-from bs4 import BeautifulSoup
-import urllib3
+import os, time, platform, argparse
+import hashlib, psutil, threading, queue
 from urllib.request import urlopen
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
-from selenium.common.exceptions import ElementNotVisibleException, StaleElementReferenceException
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.options import Options
 
-def download_url(path, url, name):
-    # http = urllib3.PoolManager()
-    # with http.request('GET', url) as f:
+def download_url(path, url):
     with urlopen(url) as f:
+        img = f.read()
+        # print(img)
+        md5 = hashlib.md5()
+        md5.update(img)
+        name = md5.hexdigest()
         with open(os.path.join(path, f"{name}.jpg"),'wb') as h: # w - write b - binary
-            img = f.read()
             h.write(img)
+
+class Download(threading.Thread):
+    
+    def __init__(self, workQueue, dst, max_img):
+        self.signal = True
+        threading.Thread.__init__(self)
+        self.workQueue = workQueue
+        self.dst = dst
+        self.max_img = max_img
+
+    def stop(self):
+        self.signal = False
+
+    def run(self):
+        idx = 0
+        while self.signal:
+            url = self.workQueue.get()
+            if url is None :
+                break
+            download_url(self.dst, url)
+            idx += 1
+            if idx == self.max_img:
+                break
 
 def crawler(keyword, dst_root, mode = "headless", num_image=50):
 
@@ -43,7 +61,7 @@ def crawler(keyword, dst_root, mode = "headless", num_image=50):
     print("Start Crawling ! ")
     if mode == "headless":
         options.add_argument(mode)
-    driver = webdriver.Chrome(executable, chrome_options=options)
+    driver = webdriver.Chrome(executable, options=options)
     driver.implicitly_wait(1.5)
 
     driver.get(f"https://www.google.com/search?q={keyword}&source=lnms&tbm=isch")
@@ -71,9 +89,34 @@ def crawler(keyword, dst_root, mode = "headless", num_image=50):
     
     print(f"{len(links)} {keyword} images collected!")
     
-    for idx, link in tqdm(enumerate(links)):
-        if idx >= num_image: break
-        download_url(dst_root, link, idx+1)
+    cpu_core_count = psutil.cpu_count(logical=True)
+    print(f"Number of cores: {cpu_core_count}")
+    qu  = queue.Queue()
+    threads = []
+
+    # Put whole files to queue.
+    for link in links:
+        qu.put(link)
+
+    # To terminate thread, put terminate keyword on the queue.
+    for _ in range(cpu_core_count):
+        qu.put(None)
+
+    # Crate thread as much as CPU core count
+    for _ in range(cpu_core_count):
+        threads.append(Download(qu, dst_root, num_image))
+
+    # Start each thread
+    for t in threads:
+        t.start()
+
+    # Wait thread until all processing will be finished
+    for t in threads:
+        t.join()
+
+    # for idx, link in tqdm(enumerate(links)):
+    #     if idx >= num_image: break
+    #     download_url(dst_root, link, idx+1)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -86,5 +129,3 @@ if __name__ == "__main__":
     dst_path = os.path.join(args.save_root, args.keyword)
     os.makedirs(dst_path, exist_ok=True)
     crawler(args.keyword, dst_path, args.mode, args.num_image)
-
-# %%

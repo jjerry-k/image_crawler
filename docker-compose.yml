@@ -1,0 +1,61 @@
+version: "2.4"
+services:
+  
+  backend:
+    container_name: backend
+    build: 
+      dockerfile: Dockerfile
+      context: ./backend
+    user: "${UID}:${GID}"
+    volumes:
+      - ./backend:/app
+      - ./utils:/app/utils
+      - /sdcard/Data:/Data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - TZ=Asia/Seoul
+    networks:
+      - backend
+    depends_on:
+      - mongo
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+  frontend:
+    container_name: frontend
+    build:
+      dockerfile: Dockerfile
+      context: ./frontend
+    user: "${UID}:${GID}"
+    volumes:
+      - ./frontend:/app
+      - ./utils:/app/utils
+      - /sdcard/Data:/Data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - TZ=Asia/Seoul
+    ports:
+      - "8501:8501"
+    networks:
+      - backend
+    depends_on:
+      - mongo
+  mongo:
+    container_name: mongo
+    image: mongo:3.6
+    volumes:
+      - /sdcard/Data/mongo:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - backend
+    
+networks:
+  backend:
+    driver: bridge

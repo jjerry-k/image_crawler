@@ -1,15 +1,36 @@
-FROM python:3.10-slim
+FROM node:20-slim AS deps
 
-RUN apt update -y
+WORKDIR /app
 
-RUN apt install -y git
+COPY package.json package-lock.json ./
 
-RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
+RUN npm ci
 
-WORKDIR "/app"
+FROM node:20-slim AS builder
 
+WORKDIR /app
+
+ENV NEXT_TELEMETRY_DISABLED=1
+
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-RUN pip3 install --no-cache-dir streamlit pymongo openpyxl pandas
+RUN npm run build
 
-CMD ["streamlit", "run", "Crawling.py", "--server.port", "8501"]
+FROM node:20-slim AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
+ENV BACKEND_BASE_URL=http://backend:5000
+ENV AUTO_REFRESH_SECONDS=60
+
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
+
+EXPOSE 3000
+
+CMD ["node", "server.js"]
